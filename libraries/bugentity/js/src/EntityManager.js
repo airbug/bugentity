@@ -29,7 +29,7 @@
 //@Require('bugdelta.ObjectChange')
 //@Require('bugdelta.SetChange')
 //@Require('bugentity.Entity')
-//@Require('mongo.MongoUpdateChanges')
+//@Require('bugmongo.MongoUpdateChanges')
 
 
 //-------------------------------------------------------------------------------
@@ -57,7 +57,7 @@ require('bugpack').context("*", function(bugpack) {
     var ObjectChange        = bugpack.require('bugdelta.ObjectChange');
     var SetChange           = bugpack.require('bugdelta.SetChange');
     var Entity              = bugpack.require('bugentity.Entity');
-    var MongoUpdateChanges  = bugpack.require('mongo.MongoUpdateChanges');
+    var MongoUpdateChanges  = bugpack.require('bugmongo.MongoUpdateChanges');
 
 
     //-------------------------------------------------------------------------------
