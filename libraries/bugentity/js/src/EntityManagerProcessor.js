@@ -18,6 +18,7 @@
 //@Require('ArgumentBug')
 //@Require('Class')
 //@Require('Obj')
+//@Require('TypeUtil')
 //@Require('bugentity.EntityManager')
 //@Require('bugentity.EntityManagerTag')
 //@Require('bugioc.ArgTag')
@@ -39,6 +40,7 @@ require('bugpack').context("*", function(bugpack) {
     var ArgumentBug         = bugpack.require('ArgumentBug');
     var Class               = bugpack.require('Class');
     var Obj                 = bugpack.require('Obj');
+    var TypeUtil            = bugpack.require('TypeUtil');
     var EntityManager       = bugpack.require('bugentity.EntityManager');
     var EntityManagerTag    = bugpack.require('bugentity.EntityManagerTag');
     var ArgTag              = bugpack.require('bugioc.ArgTag');
@@ -162,14 +164,17 @@ require('bugpack').context("*", function(bugpack) {
          * @param {function(Throwable=)} callback
          */
         processEntityManager: function(instance, callback) {
-            var _this           = this;
-            var instanceClass   = instance.getClass();
-            var tags            = this.metaContext.getTagsByReference(instanceClass);
-            tags.forEach(function(tag) {
-                if (Class.doesExtend(tag, EntityManagerTag)) {
-                    _this.registerEntityManager((/** @type {EntityManagerTag} */(tag)).getEntityType(), instance);
-                }
-            });
+            if (TypeUtil.isFunction(instance.getClass)) {
+                console.log("MADE IT - ", instance.getClass().getName());
+                var _this = this;
+                var instanceClass = instance.getClass();
+                var tags = this.metaContext.getTagsByReference(instanceClass.getConstructor());
+                tags.forEach(function (tag) {
+                    if (Class.doesExtend(tag, EntityManagerTag)) {
+                        _this.registerEntityManager((/** @type {EntityManagerTag} */(tag)).getEntityType(), instance);
+                    }
+                });
+            }
             callback();
         },
 
@@ -185,7 +190,6 @@ require('bugpack').context("*", function(bugpack) {
         deregisterEntityManager: function(entityManager) {
             this.entityManagerStore.deregisterEntityManager(entityManager);
             entityManager.setDataStore(null);
-
         },
 
         /**
@@ -194,6 +198,10 @@ require('bugpack').context("*", function(bugpack) {
          * @param {EntityManager} entityManager
          */
         registerEntityManager: function(entityType, entityManager) {
+
+            //TEST
+            console.log("Registering entity manager for entityType:", entityType);
+
             if (Class.doesExtend(entityManager, EntityManager)) {
                 entityManager.setEntityType(entityType);
                 entityManager.setDataStore(this.entityDataStore.generateManager(entityType));

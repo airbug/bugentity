@@ -82,7 +82,7 @@ require('bugpack').context("*", function(bugpack) {
             this.testSchema.addProperty(new SchemaProperty("updatedAt", "date", {}));
             this.testSchema.addProperty(new SchemaProperty("data", "object", {}));
             this.testSchemaManager = new SchemaManager();
-            this.testSchemaManager.processed = true;
+            this.testSchemaManager.configured = true;
             this.testSchemaManager.registerSchema(this.testSchema);
             this.testEntity = new Entity({
                 id: this.testId,
@@ -90,7 +90,7 @@ require('bugpack').context("*", function(bugpack) {
                 updatedAt: this.testUpdatedAt,
                 data: this.testData
             });
-            this.testEntityManager = new EntityManager({}, this.testSchemaManager, {}, this.entityDeltaBuilder);
+            this.testEntityManager = new EntityManager({}, this.testSchemaManager, this.entityDeltaBuilder);
         },
 
 
