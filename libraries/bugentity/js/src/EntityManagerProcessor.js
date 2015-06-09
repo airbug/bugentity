@@ -108,7 +108,6 @@ require('bugpack').context("*", function(bugpack) {
              * @type {MetaContext}
              */
             this.metaContext            = metaContext;
-
         },
 
 
@@ -147,14 +146,16 @@ require('bugpack').context("*", function(bugpack) {
          * @param {function(Throwable=)} callback
          */
         deprocessEntityManager: function(instance, callback) {
-            var _this           = this;
-            var instanceClass   = instance.getClass();
-            var tags            = this.metaContext.getTagsByReference(instanceClass);
-            tags.forEach(function(tag) {
-                if (Class.doesExtend(tag, EntityManagerTag)) {
-                    _this.deregisterEntityManager(instance);
-                }
-            });
+            if (TypeUtil.isFunction(instance.getClass)) {
+                var _this           = this;
+                var instanceClass   = instance.getClass();
+                var tags            = this.metaContext.getTagsByReference(instanceClass);
+                tags.forEach(function (tag) {
+                    if (Class.doesExtend(tag, EntityManagerTag)) {
+                        _this.deregisterEntityManager(instance);
+                    }
+                });
+            }
             callback();
         },
 
@@ -165,7 +166,6 @@ require('bugpack').context("*", function(bugpack) {
          */
         processEntityManager: function(instance, callback) {
             if (TypeUtil.isFunction(instance.getClass)) {
-                console.log("MADE IT - ", instance.getClass().getName());
                 var _this = this;
                 var instanceClass = instance.getClass();
                 var tags = this.metaContext.getTagsByReference(instanceClass.getConstructor());
@@ -198,10 +198,6 @@ require('bugpack').context("*", function(bugpack) {
          * @param {EntityManager} entityManager
          */
         registerEntityManager: function(entityType, entityManager) {
-
-            //TEST
-            console.log("Registering entity manager for entityType:", entityType);
-
             if (Class.doesExtend(entityManager, EntityManager)) {
                 entityManager.setEntityType(entityType);
                 entityManager.setDataStore(this.entityDataStore.generateManager(entityType));
