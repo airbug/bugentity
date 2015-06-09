@@ -239,7 +239,7 @@ require('bugpack').context("*", function(bugpack) {
 
         /**
          * @param {*} propertyDefault
-         * @returns {PropertyTag}
+         * @return {PropertyTag}
          */
         'default': function(propertyDefault) {
             this.propertyDefault = propertyDefault;

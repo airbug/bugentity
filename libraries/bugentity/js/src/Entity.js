@@ -129,7 +129,7 @@ require('bugpack').context("*", function(bugpack) {
         },
 
         /**
-         * @returns {string}
+         * @return {string}
          */
         getEntityType: function() {
             return this.entityType;

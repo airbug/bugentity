@@ -139,7 +139,7 @@ require('bugpack').context("*", function(bugpack) {
         //-------------------------------------------------------------------------------
 
         /**
-         * @returns {MongoManager}
+         * @return {MongoManager}
          */
         getDataStore: function() {
             return this.dataStore;
@@ -758,7 +758,7 @@ require('bugpack').context("*", function(bugpack) {
          *      typeGetter: function():string
          * }} propertyOptions
          * @param {SchemaProperty} schemaProperty
-         * @returns {string|*}
+         * @return {string|*}
          */
         determineSchemaPropertyType: function(entity, propertyOptions, schemaProperty) {
             var propertyType = schemaProperty.getType();
