@@ -202,7 +202,6 @@ require('bugpack').context("*", function(bugpack) {
         create: function(entity, options, dependencies, callback) {
             var _this       = this;
             var dbObject    = null;
-            var deferred    = Promises.deferred();
             if (Class.doesExtend(entity, Entity)) {
                 if (!entity.getCreatedAt()) {
                     entity.setCreatedAt(new Date());
@@ -216,7 +215,7 @@ require('bugpack').context("*", function(bugpack) {
                 }
                 dbObject = entity;
             }
-            $series([
+            return $series([
                 function(callback) {
                     _this.dataStore.create(dbObject, function(throwable, dbObject) {
                         if (!throwable) {
@@ -228,19 +227,18 @@ require('bugpack').context("*", function(bugpack) {
                 },
                 function(callback) {
                     if (dependencies && dependencies.length > 0) {
-                        _this.createDependencies(entity, options, dependencies, callback);
+                        _this.createDependencies(entity, options, dependencies, function(throwable) {
+                            if (!throwable) {
+                                callback(null, entity);
+                            } else {
+                                callback(throwable);
+                            }
+                        });
                     } else {
-                        callback();
+                        callback(null, entity);
                     }
                 }
-            ]).execute(function(throwable){
-                if (!throwable) {
-                    deferred.resolve(entity);
-                } else {
-                    deferred.reject(throwable);
-                }
-            });
-            return deferred.callback(callback);
+            ]).callback(callback);
         },
 
         /**
