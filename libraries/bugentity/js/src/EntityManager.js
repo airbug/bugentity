@@ -14,16 +14,16 @@
 
 //@Export('bugentity.EntityManager')
 
-//@Require('Bug')
 //@Require('Class')
-//@Require('Exception')
 //@Require('Flows')
 //@Require('Map')
 //@Require('Obj')
 //@Require('ObjectUtil')
 //@Require('Pair')
+//@Require('Promises')
 //@Require('Set')
 //@Require('StringUtil')
+//@Require('Throwables')
 //@Require('TypeUtil')
 //@Require('bugdelta.DocumentChange')
 //@Require('bugdelta.ObjectChange')
@@ -42,16 +42,16 @@ require('bugpack').context("*", function(bugpack) {
     // Bugpack Modules
     //-------------------------------------------------------------------------------
 
-    var Bug                 = bugpack.require('Bug');
     var Class               = bugpack.require('Class');
-    var Exception           = bugpack.require('Exception');
     var Flows               = bugpack.require('Flows');
     var Map                 = bugpack.require('Map');
     var Obj                 = bugpack.require('Obj');
     var ObjectUtil          = bugpack.require('ObjectUtil');
     var Pair                = bugpack.require('Pair');
+    var Promises            = bugpack.require('Promises');
     var Set                 = bugpack.require('Set');
     var StringUtil          = bugpack.require('StringUtil');
+    var Throwables          = bugpack.require('Throwables');
     var TypeUtil            = bugpack.require('TypeUtil');
     var DocumentChange      = bugpack.require('bugdelta.DocumentChange');
     var ObjectChange        = bugpack.require('bugdelta.ObjectChange');
@@ -196,11 +196,13 @@ require('bugpack').context("*", function(bugpack) {
          * @param {(Entity | *)} entity
          * @param {*} options
          * @param {Array.<string>} dependencies
-         * @param {function(Throwable, Entity=)} callback
+         * @param {function(Throwable, Entity=)=} callback
+         * @return {Promise}
          */
         create: function(entity, options, dependencies, callback) {
             var _this       = this;
             var dbObject    = null;
+            var deferred    = Promises.deferred();
             if (Class.doesExtend(entity, Entity)) {
                 if (!entity.getCreatedAt()) {
                     entity.setCreatedAt(new Date());
@@ -214,65 +216,69 @@ require('bugpack').context("*", function(bugpack) {
                 }
                 dbObject = entity;
             }
-
             $series([
-                $task(function(flow){
+                function(callback) {
                     _this.dataStore.create(dbObject, function(throwable, dbObject) {
                         if (!throwable) {
                             entity.setId(dbObject._id.toString());
                             entity.commitDelta();
                         }
-                        flow.complete(throwable);
+                        callback(throwable);
                     });
-                }),
-                $task(function(flow) {
+                },
+                function(callback) {
                     if (dependencies && dependencies.length > 0) {
-                        _this.createDependencies(entity, options, dependencies, function(throwable) {
-                            flow.complete(throwable);
-                        })
+                        _this.createDependencies(entity, options, dependencies, callback);
                     } else {
-                        flow.complete();
+                        callback();
                     }
-                })
+                }
             ]).execute(function(throwable){
                 if (!throwable) {
-                    callback(null, entity);
+                    deferred.resolve(entity);
                 } else {
-                    callback(throwable);
+                    deferred.reject(throwable);
                 }
             });
+            return deferred.callback(callback);
         },
 
         /**
          * @param {Entity} entity
-         * @param {function(Throwable=)} callback
+         * @param {function(Throwable=)=} callback
+         * @return {Promise}
          */
-        delete: function(entity, callback){
-            var _this   = this;
-            var id      = entity.getId();
+        delete: function(entity, callback) {
+            var _this       = this;
+            var id          = entity.getId();
+            var deferred    = Promises.deferred();
             this.dataStore.findByIdAndRemove(id, function(dbError, dbObject) {
                 if (!dbError) {
                     entity.commitDelta();
-                    callback();
+                    deferred.resolve();
                 } else {
-                    callback(_this.factoryBugFromDbError(dbError));
+                    deferred.reject(_this.factoryBugFromDbError(dbError));
                 }
             });
+            return deferred.callback(callback);
         },
 
         /**
          * @param {string} id
-         * @param {function(Throwable=)} callback
+         * @param {function(Throwable=)=} callback
+         * @return {Promise}
          */
-        deleteById: function(id, callback){
-            var _this   = this;
+        deleteById: function(id, callback) {
+            var _this       = this;
+            var deferred    = Promises.deferred();
             this.dataStore.findByIdAndRemove(id, function(dbError, dbObject) {
                 if (!dbError) {
-                    callback();
+                    deferred.resolve();
                 } else {
-                    callback(_this.factoryBugFromDbError(dbError));
+                    deferred.reject(_this.factoryBugFromDbError(dbError));
                 }
             });
+            return deferred.callback(callback);
         },
 
         /**
@@ -285,66 +291,65 @@ require('bugpack').context("*", function(bugpack) {
 
         /**
          * @param {Entity} entity
-         * @param {{
-         *      propertySchemas: {
-         *          *propertyName*: {
-         *              idGetter:   function(),
-         *              getter:     function(),
-         *              setter:     function()
-         *          }
-         *      }
-         * }} options
+         * @param {Object.<string, {
+         *      idGetter:   function(),
+         *      getter:     function(),
+         *      setter:     function()
+         * }>} options
          * @param {Array.<string>} properties
-         * @param {function(Throwable)} callback
+         * @param {function(Throwable=)=} callback
+         * @return {Promise}
          */
         populate: function(entity, options, properties, callback) {
-            var _this               = this;
-            var schema              = this.schemaManager.getSchemaByClass(entity.getClass());
-            $forEachParallel(properties, function(flow, property) {
+            var _this       = this;
+            var schema      = this.schemaManager.getSchemaByClass(entity.getClass());
+            return $forEachParallel(properties, function(callback, property) {
                 if (schema.hasProperty(property)) {
                     /** @type {SchemaProperty} */
                     var schemaProperty      = schema.getPropertyByName(property);
                     var propertyOptions     = options[property];
                     if (propertyOptions) {
-                        _this.populateProperty(entity, schemaProperty, propertyOptions, function(throwable) {
-                            flow.complete(throwable);
-                        });
+                        _this.populateProperty(entity, schemaProperty, propertyOptions, callback);
                     } else {
-                        flow.error(new Error("Cannot find options for property '" + property + "'"));
+                        callback(Throwables.exception("MissingOptions", {}, "Cannot find options for property '" + property + "'"));
                     }
                 } else {
-                    flow.error(new Error("Unknown property '" + property + "'"));
+                    callback(Throwables.exception("UnknownProperty", {}, "Unknown property '" + property + "'"));
                 }
-            }).execute(callback);
+            }).callback(callback);
         },
 
         /**
          * @param {Entity} entity
-         * @param {function(Throwable, Entity=)} callback
+         * @param {function(Throwable, Entity=)=} callback
+         * @return {Promise}
          */
-        update: function(entity, callback){
+        update: function(entity, callback) {
             entity.setUpdatedAt(new Date());
 
             var _this           = this;
-            var dataStore       = this.dataStore;
             var id              = entity.getId();
             var updateObject    = this.buildUpdateObject(entity);
-            dataStore.findByIdAndUpdate(id, updateObject, function(dbError, dbObject) {
+            var deferred        = Promises.deferred();
+            this.dataStore.findByIdAndUpdate(id, updateObject, function(dbError, dbObject) {
                 if (!dbError) {
                     entity.commitDelta();
-                    callback(null, entity);
+                    deferred.resolve(entity);
                 } else {
-                    callback(_this.factoryBugFromDbError(dbError));
+                    deferred.reject(_this.factoryBugFromDbError(dbError));
                 }
             });
+            return deferred.callback(callback);
         },
 
         /**
          * @param {string} id
-         * @param {function(Throwable, Entity=)} callback
+         * @param {function(Throwable, Entity=)=} callback
+         * @return {Promise}
          */
         retrieve: function(id, callback) {
-            var _this = this;
+            var _this       = this;
+            var deferred    = Promises.deferred();
             this.dataStore.findById(id).lean(true).exec(function(throwable, dbObject) {
                 if (!throwable) {
                     var entity = null;
@@ -352,19 +357,22 @@ require('bugpack').context("*", function(bugpack) {
                         entity = _this.convertDbObjectToEntity(dbObject);
                         entity.commitDelta();
                     }
-                    callback(null, entity);
+                    deferred.resolve(entity);
                 } else {
-                    callback(throwable);
+                    deferred.reject(throwable);
                 }
             });
+            return deferred.callback(callback);
         },
 
         /**
          * @param {Array.<string>} ids
-         * @param {function(Throwable, Map.<string, Entity>=)} callback
+         * @param {function(Throwable, Map.<string, Entity>=)=} callback
+         * @return {Promise}
          */
         retrieveEach: function(ids, callback) {
-            var _this = this;
+            var _this       = this;
+            var deferred    = Promises.deferred();
             this.dataStore.where("_id").in(ids).lean(true).exec(function(throwable, dbObjects) {
                 if (!throwable) {
                     var newMap = new Map();
@@ -378,11 +386,12 @@ require('bugpack').context("*", function(bugpack) {
                             newMap.put(id, null);
                         }
                     });
-                    callback(null, newMap);
+                    deferred.resolve(newMap);
                 } else {
-                    callback(throwable);
+                    deferred.reject(throwable);
                 }
             });
+            return deferred.callback(callback);
         },
 
         /**
@@ -406,7 +415,7 @@ require('bugpack').context("*", function(bugpack) {
                                 if (schemaProperty.hasDefault()) {
                                     entityData[propertyName] = propertyValue = schemaProperty.generateDefault();
                                 } else {
-                                    throw new Bug("MissingRequiredProperty", {}, "Property '" + propertyName + "' in entity type '" + _this.entityType + "' is required. Property was undefined")
+                                    throw Throwables.bug("MissingRequiredProperty", {}, "Property '" + propertyName + "' in entity type '" + _this.entityType + "' is required. Property was undefined")
                                 }
                             } else {
                                 if (_this.schemaManager.hasSchemaForName(propertyType)) {
@@ -417,7 +426,7 @@ require('bugpack').context("*", function(bugpack) {
                     }
                 });
             } else {
-                throw new Bug("IllegalState", {}, "Cannot find EntitySchema for Entity of type '" + entity.getEntityType() +"'");
+                throw Throwables.bug("IllegalState", {}, "Cannot find EntitySchema for Entity of type '" + entity.getEntityType() +"'");
             }
         },
 
@@ -496,7 +505,7 @@ require('bugpack').context("*", function(bugpack) {
                     }
                 });
             } else {
-                throw new Exception("NoSchemaFound", {}, "Cannot find schema for class '" + entity.getClass().getName() + "'");
+                throw Throwables.exception("NoSchemaFound", {}, "Cannot find schema for class '" + entity.getClass().getName() + "'");
             }
 
             return updateChanges.buildUpdateObject();
@@ -691,7 +700,7 @@ require('bugpack').context("*", function(bugpack) {
                                 flow.complete(throwable);
                             });
                         } else {
-                            flow.error(new Bug("EntityManager", {}, "Cannot find options for dependency '" + dependency + "'"));
+                            flow.error(Throwables.bug("EntityManager", {}, "Cannot find options for dependency '" + dependency + "'"));
                         }
                     }).execute(function(throwable) {
                         flow.complete(throwable);
@@ -745,7 +754,7 @@ require('bugpack').context("*", function(bugpack) {
                         flow.complete(throwable);
                     });
                 } else {
-                    flow.error(new Bug("EntityManager", {}, "Unknown dependency '" + dependency + "'"));
+                    flow.error(Throwables.bug("EntityManager", {}, "Unknown dependency '" + dependency + "'"));
                 }
             }).execute(callback);
         },
@@ -773,7 +782,7 @@ require('bugpack').context("*", function(bugpack) {
          * @param {Error} dbError
          */
         factoryBugFromDbError: function(dbError) {
-            return new Bug("DbError", {error: dbError}, "An error occurred in the DB", [dbError]);
+            return Throwables.bug("DbError", {error: dbError}, "An error occurred in the DB", [dbError]);
         },
 
         /**
@@ -858,7 +867,7 @@ require('bugpack').context("*", function(bugpack) {
                             break;
                     }
                 } else {
-                    flow.error(new Error("Property '" + schemaProperty.getName() + "' is not marked with 'populates'"));
+                    flow.error(Throwables.bug("BadConfiguration", {}, "Property '" + schemaProperty.getName() + "' is not marked with 'populates'"));
                 }
             }).execute(callback);
         }
