@@ -132,7 +132,7 @@ require('bugpack').context("*", function(bugpack) {
          */
         getSchemaCollection: function() {
             this.assertConfigured();
-            return this.nameToSchemaMap.getValueCollection();
+            return this.nameToSchemaMap.toValueCollection();
         },
 
         /**
