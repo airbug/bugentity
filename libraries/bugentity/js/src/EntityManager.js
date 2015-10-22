@@ -295,13 +295,14 @@ require('bugpack').context("*", function(bugpack) {
          *      setter:     function()
          * }>} options
          * @param {Array.<string>} properties
-         * @param {function(Throwable=)=} callback
+         * @param {function(Throwable, Entity=)=} callback
          * @return {Promise}
          */
         populate: function(entity, options, properties, callback) {
             var _this       = this;
             var schema      = this.schemaManager.getSchemaByClass(entity.getClass());
-            return $forEachParallel(properties, function(callback, property) {
+            var deferred    = Promises.deferred();
+            $forEachParallel(properties, function(callback, property) {
                 if (schema.hasProperty(property)) {
                     /** @type {SchemaProperty} */
                     var schemaProperty      = schema.getPropertyByName(property);
@@ -314,7 +315,14 @@ require('bugpack').context("*", function(bugpack) {
                 } else {
                     callback(Throwables.exception("UnknownProperty", {}, "Unknown property '" + property + "'"));
                 }
-            }).callback(callback);
+            }).callback(function(throwable) {
+                if (!throwable) {
+                    deferred.resolve(entity);
+                } else {
+                    deferred.reject(throwable);
+                }
+            });
+            return deferred.callback(callback);
         },
 
         /**
